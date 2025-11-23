@@ -24,7 +24,7 @@
       shellHook = "exec fish";
     };
     packages.${system}.default = pkgs.stdenv.mkDerivation {
-      name = "auto-power-mode";
+      name = "auto-power-profile";
       nativeBuildInputs = [ pkgs.pkg-config ];
       buildInputs = [ pkgs.dbus.dev ];
       makeFlags = [ "PREFIX=${placeholder "out"}"];
