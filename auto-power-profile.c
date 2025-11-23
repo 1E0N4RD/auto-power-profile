@@ -18,12 +18,17 @@
 
 #include "log.h"
 
-/// Mainly used to check for out of memory conditions. We will not handle those
-/// in this program.
 static void
-expect(bool condition) {
-    if (!condition) abort();
+do_expect(const char *const file, int line, bool condition) {
+    if (!condition) {
+        do_log("ERROR", file, line, "Assertion failed");
+        abort();
+    }
 }
+
+/// Mainly used to check for out of memory conditions. We will not handle those
+/// in this program. Like assert but not affected by _NDEBUG.
+#define expect(_cond) do_expect(__FILE__, __LINE__, (_cond))
 
 static int
 create_netlink(void) {
