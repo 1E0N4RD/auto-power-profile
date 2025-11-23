@@ -227,6 +227,7 @@ cleanup:
 static bool
 get_initial_state(struct state *state, DBusConnection *connection) {
     assert(state);
+    assert(connection);
 
     enum { BUF_SIZE = 4096 };
 
