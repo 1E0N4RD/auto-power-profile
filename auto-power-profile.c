@@ -349,12 +349,14 @@ handle_event(struct state *state, DBusConnection *connection,
     case EVENT_MAINS_ONLINE:
         if (!state->mains_online) {
             state->mains_online = true;
+
             power_profile = "performance";
         }
         break;
     case EVENT_MAINS_OFFLINE:
         if (state->mains_online) {
             state->mains_online = false;
+
             if (state->battery_low) {
                 power_profile = "power-saver";
             } else {
@@ -365,7 +367,8 @@ handle_event(struct state *state, DBusConnection *connection,
     case EVENT_BATTERY_LOW:
         if (!state->battery_low) {
             state->battery_low = true;
-            power_profile = "power-saver";
+
+            if (!state->mains_online) power_profile = "power-saver";
         }
         break;
     case EVENT_BATTERY_NOT_LOW:
