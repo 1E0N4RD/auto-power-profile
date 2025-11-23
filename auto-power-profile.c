@@ -69,6 +69,8 @@ struct uevent {
     const char *devtype;
     const char *power_supply_online;
     const char *power_supply_type;
+    const char *power_supply_capacity;
+    const char *power_supply_scope;
 };
 
 /// Check key and return value if it matches.
@@ -89,41 +91,72 @@ do_iskey(const char *restrict key, size_t keylen, const char *line,
     do_iskey(_key "=", sizeof _key, (_line), (_line_len))
 
 static void
-uevent_parse_line(struct uevent *uevent, const char *restrict line,
+uevent_parse_line(struct uevent *e, const char *restrict line,
                   size_t line_len) {
-    assert(uevent);
+    assert(e);
     assert(line);
 
     const char *value = NULL;
     if ((value = iskey("DEVTYPE", line, line_len))) {
-        uevent->devtype = value;
+        e->devtype = value;
     } else if ((value = iskey("POWER_SUPPLY_ONLINE", line, line_len))) {
-        uevent->power_supply_online = value;
+        e->power_supply_online = value;
     } else if ((value = iskey("POWER_SUPPLY_TYPE", line, line_len))) {
-        uevent->power_supply_type = value;
+        e->power_supply_type = value;
+    } else if ((value = iskey("POWER_SUPPLY_CAPACITY", line, line_len))) {
+        e->power_supply_capacity = value;
+    } else if ((value = iskey("POWER_SUPPLY_SCOPE", line, line_len))) {
+        e->power_supply_scope = value;
     }
 }
 
 static enum event
-uevent_to_event(const struct uevent *uevent) {
-    if (!uevent->devtype || strcmp(uevent->devtype, "power_supply") != 0)
+uevent_to_event(const struct uevent *e) {
+    if (!e->devtype || strcmp(e->devtype, "power_supply") != 0)
         return EVENT_NONE;
 
-    if (uevent->power_supply_type &&
-        strcmp(uevent->power_supply_type, "Mains") == 0) {
-        if (!uevent->power_supply_online) {
+    if (!e->power_supply_type) return EVENT_NONE;
+    if (strcmp(e->power_supply_type, "Mains") == 0) {
+        if (!e->power_supply_online) {
             error("Received invalid message");
             return EVENT_ERROR;
         }
-        if (strcmp(uevent->power_supply_online, "1") == 0)
-            return EVENT_MAINS_ONLINE;
+        if (strcmp(e->power_supply_online, "1") == 0) return EVENT_MAINS_ONLINE;
 
-        if (strcmp(uevent->power_supply_online, "0") == 0)
+        if (strcmp(e->power_supply_online, "0") == 0)
             return EVENT_MAINS_OFFLINE;
 
         error("Received invalid Value for POWER_SUPPLY_ONLINE: %s\n",
-              uevent->power_supply_online);
+              e->power_supply_online);
         return EVENT_ERROR;
+    }
+
+    if (strcmp(e->power_supply_type, "Battery") == 0) {
+        // Skip batteries of connected devices etc.
+        if (e->power_supply_scope &&
+            strcmp(e->power_supply_scope, "Sytem") != 0)
+            return EVENT_NONE;
+
+        // Skip batteries that don't specify a capacity.
+        if (!e->power_supply_capacity) {
+            return EVENT_NONE;
+        }
+
+        char *end;
+        const long capacity = strtol(e->power_supply_capacity, &end, 10);
+
+        // Check if parsed capacity is valid.
+        assert(end);
+        if (e->power_supply_capacity[0] == '\0' || *end != '\0') {
+            error("Received invalid message");
+            return EVENT_ERROR;
+        }
+
+        if (capacity <= 20) {
+            return EVENT_BATTERY_LOW;
+        } else {
+            return EVENT_BATTERY_NOT_LOW;
+        }
     }
 
     return EVENT_NONE;
@@ -334,6 +367,8 @@ handle_event(struct state *state, DBusConnection *connection,
     case EVENT_BATTERY_NOT_LOW:
         if (state->battery_low) {
             state->battery_low = false;
+
+            if (!state->mains_online) power_profile = "balanced";
         }
         break;
     }
