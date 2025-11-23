@@ -355,7 +355,11 @@ handle_event(struct state *state, DBusConnection *connection,
     case EVENT_MAINS_OFFLINE:
         if (state->mains_online) {
             state->mains_online = false;
-            power_profile = "balanced";
+            if (state->battery_low) {
+                power_profile = "power-saver";
+            } else {
+                power_profile = "balanced";
+            }
         }
         break;
     case EVENT_BATTERY_LOW:
